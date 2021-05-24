@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CrotoChat</title>
+    <link rel="stylesheet" href="style.css">
+
+  
+
+    <style media="screen">
+      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+      #message { text-align: center; background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px; border-radius: 3px; }
+      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
+      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
+      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
+      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
+      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
+      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
+      @media (max-width: 600px) {
+        body, #message { margin-top: 0; background: white; box-shadow: none; }
+        body { border-top: 16px solid #ffa100; }
+      }
+      .off{display: none;}
+      .user-pic{
+        border-radius: 50%;
+      }
+
+      #mensajes{
+        text-align: left;
+        list-style: none;
+        height: 200px;
+        overflow: auto;
+      }
+    </style>
+   
+  </head>
+  <body>
+    <div id="message">
+      <h2>Bienvenido <span id="nombre-usuario"></span></h2>
+      <img src="" alt="" class="user-pic" id="user-pic">
+      <h1>CrotoChat</h1>
+      <p>El Chat Del Cursito</p>
+      <a target="_blank" href="" id="login">Iniciar Sesión</a>
+      <a target="_blank" href="" id="logout" style="display: none;">Cerrar Sesión</a> 
+
+      <div id="contenedorMensajes" style="display: none;">
+        <ul id="mensajes">
+    
+        </ul>
+        <input type="text" id="mensaje" placeholder="Escribi tu mensaje">
+        <button id="pushMensaje">Enviar</button>
+      </div>
+    </div>
+    
+    
+     <script src="https://www.gstatic.com/firebasejs/8.2.6/firebase-app.js"></script>
+     <script src="https://www.gstatic.com/firebasejs/8.2.6/firebase-auth.js"></script>
+     <script src="https://www.gstatic.com/firebasejs/8.2.6/firebase-database.js"></script>
+   
+    <script>
+      
+
+      let btt = document.getElementById("login");
+      let off = document.getElementById("logout");
+      let nombreUsuario = document.getElementById("nombre-usuario")
+      let userPic = document.getElementById("user-pic")
+      let pushMensaje = document.getElementById("pushMensaje")
+      let mensaje = document.getElementById("mensaje")
+      let mensajes = document.getElementById("mensajes")
+      let contenedorMensajes = document.getElementById("contenedorMensajes")
+      
+      
+      usuario = {}
+
+      off.addEventListener("click", (e)=>{
+        e.preventDefault();
+        desloguear();
+      })
+      btt.addEventListener("click", (a)=>{
+        a.preventDefault();
+        loguearConGoogle()
+      })
+
+      pushMensaje.addEventListener("click", (e)=>{
+        e.preventDefault;
+        guardarMensaje()
+      })
+
+      function loguearConGoogle(){
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider).then( (result)=>{
+          usuario = result;
+          mostrarUsuario(usuario);
+          }).catch(error=> console.log(error.message))
+      }
+
+     
+      function desloguear(){
+        firebase.auth().signOut().then(()=>{
+          nombreUsuario.innerHTML = "";
+          userPic.setAttribute("src", "");
+        }).catch((err)=>{
+          console.log(err)
+        })
+        btt.style.display = "block";
+        off.style.display = "none";
+        contenedorMensajes.style.display = "none"
+      }
+
+      function mostrarUsuario(usuario){
+        btt.style.display = "none";
+       off.style.display = "block";
+        nombreUsuario.innerHTML = usuario.user.displayName;
+        userPic.setAttribute("src", usuario.user.photoURL)
+        contenedorMensajes.style.display = "block"
+        mostrame();
+      }
+
+//Guardar usuario que se logueó; Detecto que la web ya se cargó, y si existe el usuario, muestro sus datos//
+     document.addEventListener("DOMContentLoaded", () =>{
+        firebase.auth().onAuthStateChanged(user=>{
+          if(user){
+            //La truchada de aca abajo es para que el objeto usuario en la funcion "mostrarUsuario" me tome el objeto como viene, y no espere uno que sea user//
+            usuario = {"user":user}
+            mostrarUsuario(usuario)
+            
+          }
+        })
+      })
+
+      function guardarMensaje(){
+        const record = {
+          avatar: usuario.user.photoURL,
+          nombre: usuario.user.displayName,
+          txt: mensaje.value
+        }
+        //instancio la base de datos en una variable//
+        const db = firebase.database();
+        //creo el nodo padre, se va a ver en la base de datos//
+        const dbRef = db.ref("mensajes");
+        //creo el mensaje nuevo, que va a agregarse como hijo de dbRef//
+        const newMensaje = dbRef.push();
+        //al nuevo mensaje le doy los valores del objeto que recoge toda la informacion que quiero que permanezca en la db//
+        newMensaje.set(record);
+        //reinicio el campo del mensaje para que desaparezca lo que habia escrito una vez que se envia el mensaje//
+        mensaje.value = ""
+
+      }
+
+      //Recuperar los datos de la db, y quedarse escuchando nuevos cambios en la misma//
+      function mostrame(){
+        //referencio la base de datos//
+        const db = firebase.database();
+        //Referencia al nodo padre//
+        const dbRef = db.ref("mensajes");
+        //espera a cuando se agregan hijos; Snapshot es una "foto" de lo que hay ahora en la db//
+        dbRef.on("child_added", snapshot =>{
+          //creo el item, que seria el mensaje que va a agregarse al chat//
+          let item = document.createElement("li");
+          //usando template String, modelo el esquema de mensaje con los datos que necesito//
+          item.innerHTML = `<li><strong>${snapshot.val().nombre}: </strong>${snapshot.val().txt}</li>`
+          //lo agrego como hijo del nodo padre//
+          mensajes.appendChild(item);
+
+          //seguir el scroll con los mensajes que van llegando//
+          //me guardo todos los mensajes que hay//
+          let items = document.querySelectorAll("li");
+          //elijo el ultimo hijo//
+          let last = items[items.length-1];
+          //con este metodo le hago foco a ese ultimo hijo//
+          last.scrollIntoView();
+        })
+      }
+
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const loadEl = document.querySelector('#load');
+        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+        // // The Firebase SDK is initialized and available here!
+        //
+        // firebase.auth().onAuthStateChanged(user => { });
+        // firebase.database().ref('/path/to/ref').on('value', snapshot => { });
+        // firebase.firestore().doc('/foo/bar').get().then(() => { });
+        // firebase.functions().httpsCallable('yourFunction')().then(() => { });
+        // firebase.messaging().requestPermission().then(() => { });
+        // firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => { });
+        // firebase.analytics(); // call to activate
+        // firebase.analytics().logEvent('tutorial_completed');
+        // firebase.performance(); // call to activate
+        //
+        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+
+        try {
+          let app = firebase.app();
+          let features = [
+            'auth', 
+            'database', 
+            'firestore',
+            'functions',
+            'messaging', 
+            'storage', 
+            'analytics', 
+            'remoteConfig',
+            'performance',
+          ].filter(feature => typeof app[feature] === 'function');
+          /* loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`; */
+        } catch (e) {
+          console.error(e);
+         /*  loadEl.textContent = 'Error loading the Firebase SDK, check the console.'; */
+        }
+      });
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const config = {
+    apiKey: "AIzaSyBI7j17ejE6Cfre609LJgXIsnspkFpbzbs",
+    authDomain: "crotochat-19bb2.firebaseapp.com",
+    databaseURL: "https://crotochat-19bb2-default-rtdb.firebaseio.com",
+    projectId: "crotochat-19bb2",
+    storageBucket: "crotochat-19bb2.appspot.com",
+    messagingSenderId: "592184873120",
+    appId: "1:592184873120:web:72bd8ce1c553befba579c5",
+    measurementId: "G-3Q9XBY7H78"
+};
+
+  firebase.initializeApp(config)
+
+    </script>
+  </body>
+</html>
